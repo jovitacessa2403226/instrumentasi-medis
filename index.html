@@ -1,325 +1,424 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-#include <Wire.h>
-#include <string.h>
-#include "MAX30105.h"
-#include "spo2_algorithm.h"
+  <title>ESP32 MAX30102</title>
 
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
-
-// ==================================================
-// PIN DAN OLED
-// ==================================================
-
-#define SDA_PIN 21
-#define SCL_PIN 22
-
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-#define OLED_ADDRESS 0x3C
-
-Adafruit_SSD1306 display(
-  SCREEN_WIDTH,
-  SCREEN_HEIGHT,
-  &Wire,
-  OLED_RESET
-);
-
-// ==================================================
-// SENSOR MAX30102
-// ==================================================
-
-MAX30105 sensor;
-
-const int BUFFER_LENGTH = 100;
-
-uint32_t irBuffer[BUFFER_LENGTH];
-uint32_t redBuffer[BUFFER_LENGTH];
-
-int sampleCount = 0;
-
-int32_t heartRate = 0;
-int32_t spo2 = 0;
-
-int8_t validHeartRate = 0;
-int8_t validSpO2 = 0;
-
-// ==================================================
-// BLUETOOTH BLE
-// ==================================================
-
-#define BLE_NAME "ESP32_Sensor"
-
-#define SERVICE_UUID \
-  "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-
-#define CHARACTERISTIC_UUID \
-  "beb5483e-36e1-4688-b7f5-ea07361b26a1"
-
-BLECharacteristic *pCharacteristic = nullptr;
-
-bool deviceConnected = false;
-
-class MyServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer *server) override {
-    deviceConnected = true;
-
-    Serial.println("Dashboard BLE terhubung.");
-  }
-
-  void onDisconnect(BLEServer *server) override {
-    deviceConnected = false;
-
-    Serial.println("Dashboard BLE terputus.");
-
-    BLEDevice::startAdvertising();
-  }
-};
-
-// ==================================================
-// OLED
-// ==================================================
-
-void showOLED(const char *message) {
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-
-  display.println("ESP32 MAX30102");
-  display.println("----------------");
-  display.println(message);
-
-  display.display();
-}
-
-void showResults() {
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-
-  display.println("MAX30102 MONITOR");
-  display.println("----------------");
-
-  if (validHeartRate && validSpO2) {
-    display.print("BPM  : ");
-    display.println(heartRate);
-
-    display.print("SpO2 : ");
-    display.print(spo2);
-    display.println("%");
-  } else {
-    display.println("Membaca data...");
-    display.println("Pastikan jari");
-    display.println("menempel sensor");
-  }
-
-  display.print("BLE: ");
-  display.println(deviceConnected ? "Terhubung" : "Aktif");
-
-  display.display();
-}
-
-// ==================================================
-// INISIALISASI BLE
-// ==================================================
-
-void setupBLE() {
-  BLEDevice::init(BLE_NAME);
-
-  BLEServer *server = BLEDevice::createServer();
-  server->setCallbacks(new MyServerCallbacks());
-
-  BLEService *service =
-    server->createService(SERVICE_UUID);
-
-  pCharacteristic = service->createCharacteristic(
-    CHARACTERISTIC_UUID,
-    BLECharacteristic::PROPERTY_READ |
-    BLECharacteristic::PROPERTY_NOTIFY
-  );
-
-  pCharacteristic->addDescriptor(new BLE2902());
-  pCharacteristic->setValue("--,--");
-
-  service->start();
-
-  BLEAdvertising *advertising =
-    BLEDevice::getAdvertising();
-
-  advertising->addServiceUUID(SERVICE_UUID);
-  advertising->setScanResponse(true);
-
-  BLEDevice::startAdvertising();
-
-  Serial.println("Bluetooth BLE aktif.");
-  Serial.print("Nama perangkat: ");
-  Serial.println(BLE_NAME);
-}
-
-// ==================================================
-// KIRIM DATA BLE
-// ==================================================
-
-void sendBLEData() {
-  if (!deviceConnected || pCharacteristic == nullptr) {
-    return;
-  }
-
-  if (validHeartRate && validSpO2) {
-    char payload[32];
-
-    snprintf(
-      payload,
-      sizeof(payload),
-      "%ld,%ld",
-      (long)heartRate,
-      (long)spo2
-    );
-
-    pCharacteristic->setValue(
-      (uint8_t *)payload,
-      strlen(payload)
-    );
-
-    pCharacteristic->notify();
-
-    Serial.print("Data BLE: ");
-    Serial.println(payload);
-  }
-}
-
-// ==================================================
-// SETUP
-// ==================================================
-
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-
-  // NAMA HANYA DITAMPILKAN DI SERIAL MONITOR
-  Serial.println();
-  Serial.println("================================");
-  Serial.println("     JOVITA dan CHELSEA");
-  Serial.println("     MONITORING MAX30102");
-  Serial.println("================================");
-  Serial.println();
-
-  Wire.begin(SDA_PIN, SCL_PIN);
-
-  // Inisialisasi OLED
-  if (!display.begin(
-        SSD1306_SWITCHCAPVCC,
-        OLED_ADDRESS
-      )) {
-    Serial.println("ERROR: OLED tidak terdeteksi!");
-
-    while (true) {
-      delay(100);
+  <style>
+    * {
+      box-sizing: border-box;
     }
-  }
 
-  showOLED("Memulai sensor...");
-
-  // Inisialisasi MAX30102
-  if (!sensor.begin(Wire, I2C_SPEED_FAST)) {
-    Serial.println("ERROR: MAX30102 tidak terdeteksi!");
-
-    showOLED("Sensor gagal!");
-
-    while (true) {
-      delay(100);
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      background-color: #eef3f9;
+      color: #172b45;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
-  }
 
-  sensor.setup(
-    0x1F,
-    4,
-    2,
-    100,
-    411,
-    4096
-  );
+    .container {
+      width: 100%;
+      max-width: 900px;
+      padding: 30px 20px;
+      text-align: center;
+    }
 
-  sensor.setPulseAmplitudeRed(0x1F);
-  sensor.setPulseAmplitudeIR(0x1F);
-  sensor.setPulseAmplitudeGreen(0);
+    h1 {
+      color: #075985;
+      font-size: 42px;
+      margin: 0 0 25px;
+    }
 
-  Serial.println("MAX30102 berhasil terdeteksi.");
+    .subtitle {
+      font-size: 20px;
+      margin: 0 0 25px;
+      color: #172b45;
+    }
 
-  setupBLE();
+    .status {
+      width: 100%;
+      max-width: 840px;
+      margin: 0 auto 36px;
+      padding: 17px;
+      border-radius: 12px;
+      background: #e2e5e9;
+      color: #172b45;
+      font-size: 20px;
+    }
 
-  showOLED("Letakkan jari");
+    .buttons {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 25px;
+      margin-bottom: 10px;
+    }
 
-  Serial.println("Sistem siap digunakan.");
-  Serial.println("--------------------------------");
-}
+    button {
+      border: none;
+      border-radius: 11px;
+      padding: 17px 28px;
+      font-size: 20px;
+      color: white;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
 
-// ==================================================
-// LOOP
-// ==================================================
+    button:hover {
+      opacity: 0.85;
+    }
 
-void loop() {
-  sensor.check();
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
-  while (sensor.available()) {
-    redBuffer[sampleCount] = sensor.getFIFORed();
-    irBuffer[sampleCount] = sensor.getFIFOIR();
+    #connectBtn {
+      background: #078aca;
+    }
 
-    sampleCount++;
+    #disconnectBtn {
+      background: #e52323;
+    }
 
-    sensor.nextSample();
+    .sensor-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
 
-    if (sampleCount >= BUFFER_LENGTH) {
-      maxim_heart_rate_and_oxygen_saturation(
-        irBuffer,
-        BUFFER_LENGTH,
-        redBuffer,
-        &spo2,
-        &validSpO2,
-        &heartRate,
-        &validHeartRate
+    .sensor-card {
+      background: white;
+      width: 310px;
+      min-height: 270px;
+      padding: 35px 20px;
+      border-radius: 18px;
+      box-shadow: 0 7px 18px rgba(0, 0, 0, 0.08);
+    }
+
+    .sensor-card h2 {
+      font-size: 30px;
+      margin: 18px 0 42px;
+      color: #172b45;
+    }
+
+    .value {
+      color: #078aca;
+      font-size: 44px;
+      font-weight: bold;
+      margin-bottom: 32px;
+    }
+
+    .unit {
+      font-size: 20px;
+      color: #172b45;
+    }
+
+    .footer {
+      margin-top: 28px;
+      color: #5e7897;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 650px) {
+      .container {
+        padding: 25px 14px;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .subtitle {
+        font-size: 18px;
+      }
+
+      .status {
+        font-size: 16px;
+        margin-bottom: 25px;
+      }
+
+      .buttons {
+        gap: 12px;
+      }
+
+      button {
+        font-size: 16px;
+        padding: 14px 18px;
+      }
+
+      .sensor-card {
+        width: 100%;
+        max-width: 350px;
+        min-height: 230px;
+      }
+
+      .sensor-card h2 {
+        font-size: 25px;
+        margin-bottom: 30px;
+      }
+
+      .value {
+        font-size: 38px;
+        margin-bottom: 24px;
+      }
+
+      .unit {
+        font-size: 17px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+
+    <h1>ESP32 MAX30102</h1>
+
+    <p class="subtitle">JOVITA dan CHELSEA</p>
+
+    <div id="status" class="status" role="status" aria-live="polite">
+      Status: Belum terhubung
+    </div>
+
+    <div class="buttons">
+      <button id="connectBtn" type="button">
+        Hubungkan ESP32
+      </button>
+
+      <button id="disconnectBtn" type="button" disabled>
+        Putuskan Koneksi
+      </button>
+    </div>
+
+    <section class="sensor-container">
+
+      <article class="sensor-card">
+        <h2>Heart Rate</h2>
+
+        <div id="bpm" class="value">--</div>
+
+        <div class="unit">BPM (denyut/menit)</div>
+      </article>
+
+      <article class="sensor-card">
+        <h2>Oksigen Darah</h2>
+
+        <div id="spo2" class="value">--</div>
+
+        <div class="unit">SpO₂ (%)</div>
+      </article>
+
+    </section>
+
+    <p id="lastUpdate" class="footer">
+      Data sensor merupakan estimasi untuk demonstrasi,
+      bukan alat diagnosis medis.
+    </p>
+
+  </main>
+
+  <script>
+    // UUID harus sama dengan program ESP32
+    const SERVICE_UUID =
+      "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+
+    const CHARACTERISTIC_UUID =
+      "beb5483e-36e1-4688-b7f5-ea07361b26a1";
+
+    const DEVICE_NAME = "ESP32_Sensor";
+
+    const statusElement = document.getElementById("status");
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
+    const bpmElement = document.getElementById("bpm");
+    const spo2Element = document.getElementById("spo2");
+    const lastUpdateElement = document.getElementById("lastUpdate");
+
+    let bleDevice = null;
+    let bleServer = null;
+    let bleCharacteristic = null;
+
+    function setStatus(message, background, color) {
+      statusElement.textContent = "Status: " + message;
+      statusElement.style.backgroundColor = background;
+      statusElement.style.color = color;
+    }
+
+    function setConnected(connected) {
+      connectBtn.disabled = connected;
+      disconnectBtn.disabled = !connected;
+    }
+
+    function resetValues() {
+      bpmElement.textContent = "--";
+      spo2Element.textContent = "--";
+
+      lastUpdateElement.textContent =
+        "Data sensor merupakan estimasi untuk demonstrasi, bukan alat diagnosis medis.";
+    }
+
+    async function connectBluetooth() {
+      if (!navigator.bluetooth) {
+        setStatus(
+          "Browser tidak mendukung Bluetooth",
+          "#f8d7da",
+          "#842029"
+        );
+        return;
+      }
+
+      try {
+        connectBtn.disabled = true;
+
+        setStatus(
+          "Memilih perangkat...",
+          "#fff3cd",
+          "#856404"
+        );
+
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [
+            { name: DEVICE_NAME }
+          ],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        bleDevice.addEventListener(
+          "gattserverdisconnected",
+          onDisconnected
+        );
+
+        setStatus(
+          "Menghubungkan ke ESP32...",
+          "#fff3cd",
+          "#856404"
+        );
+
+        bleServer = await bleDevice.gatt.connect();
+
+        const service =
+          await bleServer.getPrimaryService(SERVICE_UUID);
+
+        bleCharacteristic =
+          await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        bleCharacteristic.addEventListener(
+          "characteristicvaluechanged",
+          handleSensorData
+        );
+
+        await bleCharacteristic.startNotifications();
+
+        setStatus(
+          "Terhubung ke " + DEVICE_NAME,
+          "#d1e7dd",
+          "#0f5132"
+        );
+
+        setConnected(true);
+
+      } catch (error) {
+        console.error("Bluetooth error:", error);
+
+        setStatus(
+          "Gagal terhubung. " + error.message,
+          "#f8d7da",
+          "#842029"
+        );
+
+        setConnected(false);
+      }
+    }
+
+    function handleSensorData(event) {
+      const dataView = event.target.value;
+      const decoder = new TextDecoder("utf-8");
+      const message = decoder.decode(dataView).trim();
+
+      console.log("Data diterima dari ESP32:", message);
+
+      // Format data ESP32 yang diharapkan: BPM,SpO2
+      const values = message.split(",");
+
+      if (values.length !== 2) {
+        console.warn("Format data tidak sesuai:", message);
+        return;
+      }
+
+      const bpm = Number(values[0].trim());
+      const spo2 = Number(values[1].trim());
+
+      if (
+        !Number.isFinite(bpm) ||
+        !Number.isFinite(spo2) ||
+        bpm <= 0 ||
+        spo2 <= 0
+      ) {
+        console.warn("Nilai sensor tidak valid:", message);
+        return;
+      }
+
+      bpmElement.textContent = Math.round(bpm);
+      spo2Element.textContent = Math.round(spo2);
+
+      lastUpdateElement.textContent =
+        "Data terakhir diterima: " +
+        new Date().toLocaleTimeString("id-ID");
+    }
+
+    function onDisconnected() {
+      bleServer = null;
+      bleCharacteristic = null;
+
+      setStatus(
+        "Belum terhubung",
+        "#e2e5e9",
+        "#172b45"
       );
 
-      Serial.println();
-      Serial.println("---- HASIL PEMBACAAN SENSOR ----");
-
-      Serial.print("Nama proyek: ");
-      Serial.println("JOVITA dan CHELSEA");
-
-      Serial.print("BPM: ");
-      if (validHeartRate) {
-        Serial.println(heartRate);
-      } else {
-        Serial.println("Belum valid");
-      }
-
-      Serial.print("SpO2: ");
-      if (validSpO2) {
-        Serial.print(spo2);
-        Serial.println("%");
-      } else {
-        Serial.println("Belum valid");
-      }
-
-      Serial.print("Status BLE: ");
-      Serial.println(deviceConnected ? "Terhubung" : "Menunggu koneksi");
-
-      showResults();
-      sendBLEData();
-
-      Serial.println("--------------------------------");
-
-      sampleCount = 0;
+      setConnected(false);
+      resetValues();
     }
-  }
 
-  delay(5);
-}
+    function disconnectBluetooth() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      } else {
+        onDisconnected();
+      }
+    }
+
+    connectBtn.addEventListener(
+      "click",
+      connectBluetooth
+    );
+
+    disconnectBtn.addEventListener(
+      "click",
+      disconnectBluetooth
+    );
+
+    if (!navigator.bluetooth) {
+      setStatus(
+        "Web Bluetooth tidak tersedia di browser ini",
+        "#f8d7da",
+        "#842029"
+      );
+
+      connectBtn.disabled = true;
+    }
+  </script>
+</body>
+</html>
+```
