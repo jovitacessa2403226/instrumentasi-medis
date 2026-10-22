@@ -1,84 +1,213 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Bluetooth Dashboard</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; background-color: #f4f4f9; }
-        .card { background: white; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0px 4px 10px rgba(0,0,0,0.1); }
-        button { padding: 12px 24px; font-size: 16px; cursor: pointer; background-color: #007BFF; color: white; border: none; border-radius: 5px; }
-        button:hover { background-color: #0056b3; }
-        .data-display { margin-top: 20px; font-size: 22px; }
-    </style>
-</head>
-<body>
 
-    <div class="card">
-        <h1>ESP32 JOJO & CECE</h1>
-        <h5>JOVITA dan CHELSEA<h5>
-        <button id="connectBtn">Connect to ESP32</button>
-        
-        <div class="data-display">
-            <p>Temperature: <span id="temp">--</span> &deg;C</p>
-            <p>Humidity: <span id="hum">--</span> %</p>
-        </div>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 MAX30102 Dashboard</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 30px 15px;
+      background: #f0f4f8;
+      color: #1f2937;
+    }
+
+    h1 {
+      color: #075985;
+    }
+
+    .container {
+      max-width: 650px;
+      margin: auto;
+    }
+
+    .status {
+      margin: 20px 0;
+      padding: 12px;
+      border-radius: 8px;
+      background: #e5e7eb;
+    }
+
+    .cards {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 14px;
+      box-shadow: 0 4px 12px #00000012;
+      width: 240px;
+    }
+
+    .value {
+      font-size: 36px;
+      font-weight: bold;
+      color: #0284c7;
+      margin: 18px 0;
+    }
+
+    button {
+      margin: 8px;
+      padding: 12px 22px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+      background: #0284c7;
+    }
+
+    button:hover {
+      background: #0369a1;
+    }
+
+    #disconnect {
+      background: #dc2626;
+    }
+
+    .note {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>ESP32 MAX30102</h1>
+    <p>Dashboard Pemantauan Sensor</p>
+
+    <div id="status" class="status">
+      Status: Belum terhubung
     </div>
 
-    <script>
-        const serviceUUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-        const characteristicUUID = "beb5483e-36e1-4688-b7f5-ea07361b26a1";
+    <button id="connect">Hubungkan ESP32</button>
+    <button id="disconnect">Putuskan Koneksi</button>
 
-        const connectBtn = document.getElementById('connectBtn');
-        const tempSpan = document.getElementById('temp');
-        const humSpan = document.getElementById('hum');
+    <div class="cards">
+      <div class="card">
+        <h2>Heart Rate</h2>
+        <div id="bpm" class="value">--</div>
+        <p>BPM (denyut/menit)</p>
+      </div>
 
-        connectBtn.addEventListener('click', async () => {
-            try {
-                // 1. Request Bluetooth device filtered by name
-                console.log('Requesting Bluetooth Device...');
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'ESP32_Sensor' }],
-                    optionalServices: [serviceUUID]
-                });
+      <div class="card">
+        <h2>Oksigen Darah</h2>
+        <div id="spo2" class="value">--</div>
+        <p>SpO₂ (%)</p>
+      </div>
+    </div>
 
-                // 2. Connect to the device's GATT server
-                console.log('Connecting to GATT Server...');
-                const server = await device.gatt.connect();
+    <p class="note">
+      Data sensor merupakan estimasi untuk demonstrasi,
+      bukan alat diagnosis medis.
+    </p>
+  </div>
 
-                // 3. Get the custom service
-                console.log('Getting Service...');
-                const service = await server.getPrimaryService(serviceUUID);
+  <script>
+    const SERVICE_UUID =
+      "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
 
-                // 4. Get the characteristic
-                console.log('Getting Characteristic...');
-                const characteristic = await service.getCharacteristic(characteristicUUID);
+    const CHARACTERISTIC_UUID =
+      "beb5483e-36e1-4688-b7f5-ea07361b26a1";
 
-                // 5. Start listening for live notifications
-                console.log('Starting Notifications...');
-                await characteristic.startNotifications();
-                
-                characteristic.addEventListener('characteristicvaluechanged', (event) => {
-                    const value = new TextDecoder().decode(event.target.value);
-                    
-                    // Parse the "temp,humidity" string payload
-                    const parts = value.split(',');
-                    if (parts.length === 2) {
-                        tempSpan.textContent = parts[0];
-                        humSpan.textContent = parts[1];
-                    }
-                });
+    let device = null;
+    let characteristic = null;
 
-                // Update UI upon successful connection
-                connectBtn.textContent = 'Connected';
-                connectBtn.style.backgroundColor = '#28a745';
-                connectBtn.disabled = true;
+    const statusText = document.getElementById("status");
+    const bpmDisplay = document.getElementById("bpm");
+    const spo2Display = document.getElementById("spo2");
 
-            } catch (error) {
-                console.error('Connection failed: ', error);
-                alert('Connection failed or canceled: ' + error);
+    document.getElementById("connect").addEventListener(
+      "click",
+      async () => {
+        try {
+          if (!navigator.bluetooth) {
+            throw new Error(
+              "Browser tidak mendukung Web Bluetooth. Gunakan Chrome atau Edge."
+            );
+          }
+
+          statusText.textContent = "Memilih perangkat ESP32...";
+
+          device = await navigator.bluetooth.requestDevice({
+            filters: [{ name: "ESP32_Sensor" }],
+            optionalServices: [SERVICE_UUID]
+          });
+
+          device.addEventListener(
+            "gattserverdisconnected",
+            () => {
+              statusText.textContent = "Status: Terputus";
+              characteristic = null;
             }
-        });
-    </script>
+          );
+
+          const server = await device.gatt.connect();
+
+          const service =
+            await server.getPrimaryService(SERVICE_UUID);
+
+          characteristic =
+            await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+          await characteristic.startNotifications();
+
+          characteristic.addEventListener(
+            "characteristicvaluechanged",
+            handleData
+          );
+
+          statusText.textContent =
+            "Status: Terhubung ke " + device.name;
+        } catch (error) {
+          statusText.textContent = "Gagal: " + error.message;
+        }
+      }
+    );
+
+    function handleData(event) {
+      const value = event.target.value;
+      const decoder = new TextDecoder();
+
+      const data = decoder.decode(value).trim();
+      const parts = data.split(",");
+
+      if (parts.length >= 2) {
+        const bpm = Number(parts[0]);
+        const spo2 = Number(parts[1]);
+
+        if (Number.isFinite(bpm) && Number.isFinite(spo2)) {
+          bpmDisplay.textContent = bpm;
+          spo2Display.textContent = spo2;
+        }
+      }
+    }
+
+    document.getElementById("disconnect").addEventListener(
+      "click",
+      () => {
+        if (device && device.gatt.connected) {
+          device.gatt.disconnect();
+        }
+
+        statusText.textContent = "Status: Belum terhubung";
+        characteristic = null;
+      }
+    );
+  </script>
 </body>
 </html>
