@@ -1,121 +1,257 @@
-
+```html
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 MAX30102 Dashboard</title>
+  <title>Monitoring Detak Jantung dan SpO₂</title>
 
   <style>
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
     body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 30px 15px;
-      background: #f0f4f8;
-      color: #1f2937;
-    }
-
-    h1 {
-      color: #075985;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #e8f3ff, #f5f0ff);
+      color: #243047;
+      min-height: 100vh;
+      padding: 24px 16px;
     }
 
     .container {
-      max-width: 650px;
+      max-width: 850px;
       margin: auto;
     }
 
-    .status {
-      margin: 20px 0;
-      padding: 12px;
-      border-radius: 8px;
-      background: #e5e7eb;
+    header {
+      text-align: center;
+      margin: 24px 0 30px;
     }
 
-    .cards {
+    header h1 {
+      font-size: clamp(24px, 5vw, 34px);
+      margin-bottom: 12px;
+      color: #243b70;
+    }
+
+    header p {
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .connection-card,
+    .sensor-card,
+    .info-card {
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 8px 25px rgba(40, 60, 100, 0.08);
+      margin-bottom: 20px;
+    }
+
+    .connection-card {
+      text-align: center;
+    }
+
+    .connection-card h2 {
+      font-size: 19px;
+      margin-bottom: 12px;
+    }
+
+    #status {
+      display: inline-block;
+      padding: 9px 15px;
+      border-radius: 30px;
+      background: #fff3cd;
+      color: #856404;
+      font-size: 14px;
+      margin-bottom: 18px;
+    }
+
+    .buttons {
       display: flex;
       justify-content: center;
-      gap: 16px;
+      gap: 12px;
       flex-wrap: wrap;
     }
 
-    .card {
-      background: white;
-      padding: 24px;
-      border-radius: 14px;
-      box-shadow: 0 4px 12px #00000012;
-      width: 240px;
-    }
-
-    .value {
-      font-size: 36px;
-      font-weight: bold;
-      color: #0284c7;
-      margin: 18px 0;
-    }
-
     button {
-      margin: 8px;
-      padding: 12px 22px;
-      font-size: 16px;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
+      padding: 12px 22px;
+      font-size: 15px;
+      font-weight: bold;
       cursor: pointer;
-      color: white;
-      background: #0284c7;
+      transition: 0.2s;
     }
 
     button:hover {
-      background: #0369a1;
+      opacity: 0.88;
+      transform: translateY(-1px);
     }
 
-    #disconnect {
-      background: #dc2626;
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
     }
 
-    .note {
+    #connectBtn {
+      background: #2563eb;
+      color: white;
+    }
+
+    #disconnectBtn {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .sensor-card {
+      text-align: center;
+      margin-bottom: 0;
+    }
+
+    .sensor-icon {
+      font-size: 34px;
+      margin-bottom: 12px;
+    }
+
+    .sensor-card h2 {
+      font-size: 17px;
+      color: #64748b;
+      margin-bottom: 14px;
+    }
+
+    .value {
+      font-size: clamp(34px, 7vw, 48px);
+      font-weight: bold;
+      color: #243b70;
+    }
+
+    .unit {
+      font-size: 15px;
+      color: #64748b;
+      margin-top: 7px;
+    }
+
+    .bpm-card {
+      border-top: 5px solid #ef4444;
+    }
+
+    .spo2-card {
+      border-top: 5px solid #0ea5e9;
+    }
+
+    .info-card {
+      margin-top: 20px;
+      line-height: 1.7;
+    }
+
+    .info-card h2 {
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+
+    .info-card p {
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    #lastUpdate {
+      margin-top: 12px;
       font-size: 13px;
       color: #64748b;
+      text-align: center;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
       margin-top: 24px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 520px) {
+      .sensor-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .connection-card,
+      .sensor-card,
+      .info-card {
+        padding: 20px;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <h1>ESP32 MAX30102</h1>
-    <p>Dashboard Pemantauan Sensor</p>
+  <main class="container">
+    <header>
+      <h1>Monitoring Detak Jantung dan SpO₂</h1>
+      <p>
+        Sistem pemantauan berbasis ESP32 dan sensor MAX30102
+        melalui koneksi Bluetooth Low Energy (BLE).
+      </p>
+    </header>
 
-    <div id="status" class="status">
-      Status: Belum terhubung
-    </div>
-
-    <button id="connect">Hubungkan ESP32</button>
-    <button id="disconnect">Putuskan Koneksi</button>
-
-    <div class="cards">
-      <div class="card">
-        <h2>Heart Rate</h2>
-        <div id="bpm" class="value">--</div>
-        <p>BPM (denyut/menit)</p>
+    <section class="connection-card">
+      <h2>Koneksi Perangkat</h2>
+      <div id="status" role="status" aria-live="polite">
+        Belum terhubung
       </div>
 
-      <div class="card">
-        <h2>Oksigen Darah</h2>
-        <div id="spo2" class="value">--</div>
-        <p>SpO₂ (%)</p>
-      </div>
-    </div>
+      <div class="buttons">
+        <button id="connectBtn" type="button">
+          Hubungkan Bluetooth
+        </button>
 
-    <p class="note">
-      Data sensor merupakan estimasi untuk demonstrasi,
-      bukan alat diagnosis medis.
-    </p>
-  </div>
+        <button id="disconnectBtn" type="button" disabled>
+          Putuskan Koneksi
+        </button>
+      </div>
+    </section>
+
+    <section class="sensor-grid">
+      <article class="sensor-card bpm-card">
+        <div class="sensor-icon" aria-hidden="true">❤️</div>
+        <h2>Detak Jantung</h2>
+        <div class="value" id="bpm">--</div>
+        <div class="unit">BPM (detak/menit)</div>
+      </article>
+
+      <article class="sensor-card spo2-card">
+        <div class="sensor-icon" aria-hidden="true">🩸</div>
+        <h2>Saturasi Oksigen</h2>
+        <div class="value" id="spo2">--</div>
+        <div class="unit">SpO₂ (%)</div>
+      </article>
+    </section>
+
+    <section class="info-card">
+      <h2>Informasi Pengukuran</h2>
+      <p>
+        Letakkan jari dengan stabil pada sensor MAX30102.
+        Tunggu beberapa saat sampai pembacaan sensor menjadi stabil.
+      </p>
+      <p id="lastUpdate">Belum ada data yang diterima.</p>
+    </section>
+
+    <footer>
+      Prototipe instrumentasi medis untuk pembelajaran.
+      Hasil sensor bukan pengganti alat medis atau diagnosis profesional.
+    </footer>
+  </main>
 
   <script>
     const SERVICE_UUID =
@@ -124,90 +260,179 @@
     const CHARACTERISTIC_UUID =
       "beb5483e-36e1-4688-b7f5-ea07361b26a1";
 
-    let device = null;
-    let characteristic = null;
-
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
     const statusText = document.getElementById("status");
     const bpmDisplay = document.getElementById("bpm");
     const spo2Display = document.getElementById("spo2");
+    const lastUpdate = document.getElementById("lastUpdate");
 
-    document.getElementById("connect").addEventListener(
-      "click",
-      async () => {
-        try {
-          if (!navigator.bluetooth) {
-            throw new Error(
-              "Browser tidak mendukung Web Bluetooth. Gunakan Chrome atau Edge."
-            );
-          }
+    let bleDevice = null;
+    let bleServer = null;
+    let bleCharacteristic = null;
 
-          statusText.textContent = "Memilih perangkat ESP32...";
+    function setStatus(message, color, background) {
+      statusText.textContent = message;
+      statusText.style.color = color;
+      statusText.style.background = background;
+    }
 
-          device = await navigator.bluetooth.requestDevice({
-            filters: [{ name: "ESP32_Sensor" }],
-            optionalServices: [SERVICE_UUID]
-          });
+    function resetReadings() {
+      bpmDisplay.textContent = "--";
+      spo2Display.textContent = "--";
+      lastUpdate.textContent = "Belum ada data yang diterima.";
+    }
 
-          device.addEventListener(
-            "gattserverdisconnected",
-            () => {
-              statusText.textContent = "Status: Terputus";
-              characteristic = null;
-            }
-          );
+    function updateButtons(connected) {
+      connectBtn.disabled = connected;
+      disconnectBtn.disabled = !connected;
+    }
 
-          const server = await device.gatt.connect();
-
-          const service =
-            await server.getPrimaryService(SERVICE_UUID);
-
-          characteristic =
-            await service.getCharacteristic(CHARACTERISTIC_UUID);
-
-          await characteristic.startNotifications();
-
-          characteristic.addEventListener(
-            "characteristicvaluechanged",
-            handleData
-          );
-
-          statusText.textContent =
-            "Status: Terhubung ke " + device.name;
-        } catch (error) {
-          statusText.textContent = "Gagal: " + error.message;
-        }
+    async function connectBluetooth() {
+      if (!navigator.bluetooth) {
+        setStatus(
+          "Browser tidak mendukung Web Bluetooth",
+          "#991b1b",
+          "#fee2e2"
+        );
+        return;
       }
-    );
 
-    function handleData(event) {
-      const value = event.target.value;
-      const decoder = new TextDecoder();
+      try {
+        connectBtn.disabled = true;
 
-      const data = decoder.decode(value).trim();
-      const parts = data.split(",");
+        setStatus(
+          "Memilih perangkat...",
+          "#854d0e",
+          "#fef3c7"
+        );
 
-      if (parts.length >= 2) {
-        const bpm = Number(parts[0]);
-        const spo2 = Number(parts[1]);
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "ESP32_Sensor" }],
+          optionalServices: [SERVICE_UUID]
+        });
 
-        if (Number.isFinite(bpm) && Number.isFinite(spo2)) {
-          bpmDisplay.textContent = bpm;
-          spo2Display.textContent = spo2;
-        }
+        bleDevice.addEventListener(
+          "gattserverdisconnected",
+          onDisconnected
+        );
+
+        setStatus(
+          "Menghubungkan ke ESP32...",
+          "#854d0e",
+          "#fef3c7"
+        );
+
+        bleServer = await bleDevice.gatt.connect();
+
+        const service =
+          await bleServer.getPrimaryService(SERVICE_UUID);
+
+        bleCharacteristic =
+          await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        await bleCharacteristic.startNotifications();
+
+        bleCharacteristic.addEventListener(
+          "characteristicvaluechanged",
+          handleSensorData
+        );
+
+        setStatus(
+          "Terhubung ke " + bleDevice.name,
+          "#166534",
+          "#dcfce7"
+        );
+
+        updateButtons(true);
+
+      } catch (error) {
+        console.error("Kesalahan Bluetooth:", error);
+
+        setStatus(
+          "Gagal terhubung: " + error.message,
+          "#991b1b",
+          "#fee2e2"
+        );
+
+        updateButtons(false);
       }
     }
 
-    document.getElementById("disconnect").addEventListener(
-      "click",
-      () => {
-        if (device && device.gatt.connected) {
-          device.gatt.disconnect();
-        }
+    function handleSensorData(event) {
+      const value = event.target.value;
+      const decoder = new TextDecoder("utf-8");
+      const message = decoder.decode(value).trim();
 
-        statusText.textContent = "Status: Belum terhubung";
-        characteristic = null;
+      console.log("Data dari ESP32:", message);
+
+      // Format data yang diharapkan: BPM,SpO2
+      const parts = message.split(",");
+
+      if (parts.length !== 2) {
+        console.warn("Format data tidak sesuai:", message);
+        return;
       }
-    );
+
+      const bpm = Number(parts[0].trim());
+      const spo2 = Number(parts[1].trim());
+
+      if (
+        !Number.isFinite(bpm) ||
+        !Number.isFinite(spo2) ||
+        bpm <= 0 ||
+        spo2 <= 0
+      ) {
+        console.warn("Data sensor tidak valid:", message);
+        return;
+      }
+
+      bpmDisplay.textContent = Math.round(bpm);
+      spo2Display.textContent = Math.round(spo2);
+      lastUpdate.textContent =
+        "Data terakhir diterima: " +
+        new Date().toLocaleTimeString("id-ID");
+    }
+
+    function onDisconnected() {
+      bleServer = null;
+      bleCharacteristic = null;
+
+      setStatus(
+        "Koneksi terputus",
+        "#991b1b",
+        "#fee2e2"
+      );
+
+      updateButtons(false);
+      resetReadings();
+    }
+
+    async function disconnectBluetooth() {
+      try {
+        if (bleDevice && bleDevice.gatt.connected) {
+          bleDevice.gatt.disconnect();
+        } else {
+          onDisconnected();
+        }
+      } catch (error) {
+        console.error("Kesalahan saat memutus koneksi:", error);
+        onDisconnected();
+      }
+    }
+
+    connectBtn.addEventListener("click", connectBluetooth);
+    disconnectBtn.addEventListener("click", disconnectBluetooth);
+
+    if (!navigator.bluetooth) {
+      setStatus(
+        "Web Bluetooth tidak tersedia di browser ini",
+        "#991b1b",
+        "#fee2e2"
+      );
+      connectBtn.disabled = true;
+    }
   </script>
 </body>
 </html>
+```
