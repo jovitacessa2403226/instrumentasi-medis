@@ -1,424 +1,334 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>ESP32 MAX30102</title>
-
+  <meta name="theme-color" content="#102a43">
+  <title>Monitoring Kesehatan | ESP32</title>
   <style>
-    * {
-      box-sizing: border-box;
+    :root {
+      --navy: #102a43;
+      --blue: #2563eb;
+      --cyan: #0ea5a4;
+      --bg: #f3f7fb;
+      --muted: #62748a;
+      --line: #e2eaf2;
+      --white: #ffffff;
+      --shadow: 0 12px 35px rgba(16,42,67,.08);
     }
-
+    * { box-sizing: border-box; }
     body {
-      margin: 0;
-      padding: 0;
-      min-height: 100vh;
-      font-family: Arial, Helvetica, sans-serif;
-      background-color: #eef3f9;
-      color: #172b45;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      margin: 0; min-height: 100vh; padding: 28px 16px 42px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--navy);
+      background: radial-gradient(circle at 10% 0%, #e1f2ff 0, transparent 34%), var(--bg);
     }
-
-    .container {
-      width: 100%;
-      max-width: 900px;
-      padding: 30px 20px;
-      text-align: center;
+    .wrap { width: min(960px, 100%); margin: 0 auto; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:24px; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .logo {
+      width:46px; height:46px; display:grid; place-items:center; border-radius:14px;
+      color:white; font-size:23px; background:linear-gradient(135deg,var(--blue),var(--cyan));
+      box-shadow:0 8px 18px rgba(37,99,235,.2);
     }
-
-    h1 {
-      color: #075985;
-      font-size: 42px;
-      margin: 0 0 25px;
-    }
-
-    .subtitle {
-      font-size: 20px;
-      margin: 0 0 25px;
-      color: #172b45;
-    }
-
+    h1 { margin:0; font-size:clamp(20px,4vw,27px); letter-spacing:-.6px; }
+    .subtitle { margin:4px 0 0; color:var(--muted); font-size:13px; }
     .status {
-      width: 100%;
-      max-width: 840px;
-      margin: 0 auto 36px;
-      padding: 17px;
-      border-radius: 12px;
-      background: #e2e5e9;
-      color: #172b45;
-      font-size: 20px;
+      display:flex; align-items:center; gap:8px; padding:9px 13px; border:1px solid var(--line);
+      background:white; border-radius:999px; color:var(--muted); font-size:12px; font-weight:700;
     }
-
-    .buttons {
-      display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 25px;
-      margin-bottom: 10px;
+    .dot { width:8px; height:8px; border-radius:50%; background:#94a3b8; }
+    .status.connected .dot { background:#16a34a; box-shadow:0 0 0 4px #dcfce7; }
+    .panel {
+      background:var(--white); border:1px solid rgba(226,234,242,.9); border-radius:20px;
+      padding:22px; box-shadow:var(--shadow); margin-bottom:18px;
     }
-
+    .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+    h2 { font-size:17px; margin:0; letter-spacing:-.2px; }
+    .hint { color:var(--muted); font-size:12px; margin:5px 0 0; }
     button {
-      border: none;
-      border-radius: 11px;
-      padding: 17px 28px;
-      font-size: 20px;
-      color: white;
-      cursor: pointer;
-      transition: opacity 0.2s;
+      border:0; border-radius:11px; padding:12px 17px; font:700 13px inherit;
+      font-size:13px; font-weight:700; cursor:pointer; transition:.18s ease;
     }
-
-    button:hover {
-      opacity: 0.85;
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    button:not(:disabled):active { transform:scale(.98); }
+    .primary { color:white; background:linear-gradient(135deg,var(--blue),#1d4ed8); }
+    .primary:hover { filter:brightness(1.06); }
+    .secondary { color:var(--navy); background:#edf3f8; }
+    .green { color:white; background:linear-gradient(135deg,#0d9488,#0f766e); }
+    .download { color:#075985; background:#e0f2fe; }
+    .connect-row { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+    .device-note { color:var(--muted); font-size:12px; line-height:1.5; }
+    .fields { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    label { display:block; font-size:12px; font-weight:700; color:#52677d; margin-bottom:8px; }
+    input {
+      width:100%; border:1px solid #d8e2ec; background:#fbfdff; border-radius:11px;
+      padding:13px 12px; font:inherit; font-size:15px; color:var(--navy); outline:none;
     }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    #connectBtn {
-      background: #078aca;
-    }
-
-    #disconnectBtn {
-      background: #e52323;
-    }
-
-    .sensor-container {
-      display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-
-    .sensor-card {
-      background: white;
-      width: 310px;
-      min-height: 270px;
-      padding: 35px 20px;
-      border-radius: 18px;
-      box-shadow: 0 7px 18px rgba(0, 0, 0, 0.08);
-    }
-
-    .sensor-card h2 {
-      font-size: 30px;
-      margin: 18px 0 42px;
-      color: #172b45;
-    }
-
-    .value {
-      color: #078aca;
-      font-size: 44px;
-      font-weight: bold;
-      margin-bottom: 32px;
-    }
-
-    .unit {
-      font-size: 20px;
-      color: #172b45;
-    }
-
-    .footer {
-      margin-top: 28px;
-      color: #5e7897;
-      font-size: 16px;
-      line-height: 1.6;
-    }
-
-    @media (max-width: 650px) {
-      .container {
-        padding: 25px 14px;
-      }
-
-      h1 {
-        font-size: 32px;
-      }
-
-      .subtitle {
-        font-size: 18px;
-      }
-
-      .status {
-        font-size: 16px;
-        margin-bottom: 25px;
-      }
-
-      .buttons {
-        gap: 12px;
-      }
-
-      button {
-        font-size: 16px;
-        padding: 14px 18px;
-      }
-
-      .sensor-card {
-        width: 100%;
-        max-width: 350px;
-        min-height: 230px;
-      }
-
-      .sensor-card h2 {
-        font-size: 25px;
-        margin-bottom: 30px;
-      }
-
-      .value {
-        font-size: 38px;
-        margin-bottom: 24px;
-      }
-
-      .unit {
-        font-size: 17px;
-      }
+    input:focus { border-color:#60a5fa; box-shadow:0 0 0 3px #dbeafe; }
+    input[readonly] { background:#f3f7fb; color:#29445f; }
+    .unit { color:#8a9aad; font-size:11px; font-weight:500; }
+    .save-row { display:flex; justify-content:flex-end; margin-top:16px; }
+    .table-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:13px; }
+    table { width:100%; border-collapse:collapse; min-width:430px; }
+    th,td { text-align:left; padding:13px 15px; border-bottom:1px solid var(--line); font-size:13px; }
+    th { background:#f5f8fc; color:#52677d; font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
+    tbody tr:last-child td { border-bottom:0; }
+    tbody tr:hover { background:#fbfdff; }
+    .empty { text-align:center; color:#8494a7; padding:28px 12px; }
+    .table-actions { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .count { color:var(--muted); font-size:12px; }
+    .message { min-height:18px; margin:12px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
+    .message.error { color:#b91c1c; }
+    footer { text-align:center; color:#8a9aad; font-size:11px; padding:8px 0; }
+    @media(max-width:650px) {
+      body { padding:20px 12px 30px; }
+      header { align-items:flex-start; flex-direction:column; }
+      .panel { padding:17px; border-radius:16px; }
+      .fields { grid-template-columns:1fr; gap:12px; }
+      .connect-row { align-items:flex-start; flex-direction:column; }
+      .connect-row button { width:100%; }
+      .panel-head { align-items:flex-start; }
     }
   </style>
 </head>
-
 <body>
-  <main class="container">
+  <main class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">♥</div>
+        <div>
+          <h1>Monitoring Kesehatan</h1>
+          <p class="subtitle">Pemantauan detak jantung dan temperatur tubuh</p>
+        </div>
+      </div>
+      <div class="status" id="connectionStatus"><span class="dot"></span><span id="statusText">Belum terhubung</span></div>
+    </header>
 
-    <h1>ESP32 MAX30102</h1>
-
-    <p class="subtitle">JOVITA dan CHELSEA</p>
-
-    <div id="status" class="status" role="status" aria-live="polite">
-      Status: Belum terhubung
-    </div>
-
-    <div class="buttons">
-      <button id="connectBtn" type="button">
-        Hubungkan ESP32
-      </button>
-
-      <button id="disconnectBtn" type="button" disabled>
-        Putuskan Koneksi
-      </button>
-    </div>
-
-    <section class="sensor-container">
-
-      <article class="sensor-card">
-        <h2>Heart Rate</h2>
-
-        <div id="bpm" class="value">--</div>
-
-        <div class="unit">BPM (denyut/menit)</div>
-      </article>
-
-      <article class="sensor-card">
-        <h2>Oksigen Darah</h2>
-
-        <div id="spo2" class="value">--</div>
-
-        <div class="unit">SpO₂ (%)</div>
-      </article>
-
+    <section class="panel">
+      <div class="connect-row">
+        <div>
+          <h2>Koneksi Perangkat</h2>
+          <p class="hint">Hubungkan website dengan ESP32 melalui Bluetooth Low Energy (BLE).</p>
+        </div>
+        <button class="primary" id="connectBtn" type="button">＋ Connect Bluetooth</button>
+      </div>
+      <p class="message" id="connectionMessage">Pastikan ESP32 menyala dan Bluetooth BLE sudah aktif.</p>
     </section>
 
-    <p id="lastUpdate" class="footer">
-      Data sensor merupakan estimasi untuk demonstrasi,
-      bukan alat diagnosis medis.
-    </p>
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Data Pengukuran</h2>
+          <p class="hint">Data HR dan temperatur akan diperbarui saat diterima dari ESP32.</p>
+        </div>
+      </div>
+      <div class="fields">
+        <div>
+          <label for="nameInput">Nama</label>
+          <input id="nameInput" type="text" placeholder="Masukkan nama">
+        </div>
+        <div>
+          <label for="hrInput">HR <span class="unit">(bpm)</span></label>
+          <input id="hrInput" type="text" placeholder="Menunggu sensor..." readonly>
+        </div>
+        <div>
+          <label for="tempInput">Temperatur <span class="unit">(°C)</span></label>
+          <input id="tempInput" type="text" placeholder="Menunggu sensor..." readonly>
+        </div>
+      </div>
+      <div class="save-row">
+        <button class="green" id="saveBtn" type="button">Simpan Data</button>
+      </div>
+      <p class="message" id="saveMessage" aria-live="polite"></p>
+    </section>
 
+    <section class="panel">
+      <div class="table-actions">
+        <div>
+          <h2>Data Tersimpan</h2>
+          <p class="hint">Riwayat hasil pengukuran yang sudah disimpan.</p>
+        </div>
+        <span class="count" id="recordCount">0 data</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nama</th><th>HR (bpm)</th><th>Temperatur (°C)</th></tr></thead>
+          <tbody id="recordsBody">
+            <tr><td class="empty" colspan="3">Belum ada data. Silakan lakukan pengukuran dan tekan Simpan Data.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="save-row">
+        <button class="download" id="downloadBtn" type="button">↓ Download CSV</button>
+      </div>
+      <p class="message" id="downloadMessage"></p>
+    </section>
+
+    <footer>Proyek monitoring kesehatan berbasis ESP32</footer>
   </main>
 
   <script>
-    // UUID harus sama dengan program ESP32
-    const SERVICE_UUID =
-      "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    // UUID layanan dan karakteristik BLE. Samakan dengan program BLE pada ESP32.
+    const SERVICE_UUID = '12345678-1234-1234-1234-1234567890ab';
+    const DATA_CHARACTERISTIC_UUID = '12345678-1234-1234-1234-1234567890ac';
 
-    const CHARACTERISTIC_UUID =
-      "beb5483e-36e1-4688-b7f5-ea07361b26a1";
-
-    const DEVICE_NAME = "ESP32_Sensor";
-
-    const statusElement = document.getElementById("status");
-    const connectBtn = document.getElementById("connectBtn");
-    const disconnectBtn = document.getElementById("disconnectBtn");
-    const bpmElement = document.getElementById("bpm");
-    const spo2Element = document.getElementById("spo2");
-    const lastUpdateElement = document.getElementById("lastUpdate");
+    const connectBtn = document.getElementById('connectBtn');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const statusText = document.getElementById('statusText');
+    const connectionMessage = document.getElementById('connectionMessage');
+    const hrInput = document.getElementById('hrInput');
+    const tempInput = document.getElementById('tempInput');
+    const nameInput = document.getElementById('nameInput');
+    const recordsBody = document.getElementById('recordsBody');
+    const recordCount = document.getElementById('recordCount');
 
     let bleDevice = null;
-    let bleServer = null;
-    let bleCharacteristic = null;
+    let dataCharacteristic = null;
+    let records = [];
 
-    function setStatus(message, background, color) {
-      statusElement.textContent = "Status: " + message;
-      statusElement.style.backgroundColor = background;
-      statusElement.style.color = color;
-    }
+    try {
+      records = JSON.parse(localStorage.getItem('monitoringRecords') || '[]');
+      if (!Array.isArray(records)) records = [];
+    } catch (_) { records = []; }
+    renderRecords();
 
-    function setConnected(connected) {
-      connectBtn.disabled = connected;
-      disconnectBtn.disabled = !connected;
-    }
-
-    function resetValues() {
-      bpmElement.textContent = "--";
-      spo2Element.textContent = "--";
-
-      lastUpdateElement.textContent =
-        "Data sensor merupakan estimasi untuk demonstrasi, bukan alat diagnosis medis.";
+    function setConnection(connected, message) {
+      connectionStatus.classList.toggle('connected', connected);
+      statusText.textContent = connected ? 'Terhubung ke ESP32' : 'Belum terhubung';
+      connectBtn.textContent = connected ? 'Putuskan Bluetooth' : '＋ Connect Bluetooth';
+      connectionMessage.textContent = message;
+      connectionMessage.classList.toggle('error', !connected && message.toLowerCase().includes('gagal'));
     }
 
     async function connectBluetooth() {
       if (!navigator.bluetooth) {
-        setStatus(
-          "Browser tidak mendukung Bluetooth",
-          "#f8d7da",
-          "#842029"
-        );
+        setConnection(false, 'Bluetooth tidak didukung browser ini. Gunakan Chrome di Android atau komputer.');
         return;
       }
-
       try {
-        connectBtn.disabled = true;
-
-        setStatus(
-          "Memilih perangkat...",
-          "#fff3cd",
-          "#856404"
-        );
-
+        connectionMessage.textContent = 'Mencari perangkat ESP32...';
         bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [
-            { name: DEVICE_NAME }
-          ],
+          acceptAllDevices: true,
           optionalServices: [SERVICE_UUID]
         });
-
-        bleDevice.addEventListener(
-          "gattserverdisconnected",
-          onDisconnected
-        );
-
-        setStatus(
-          "Menghubungkan ke ESP32...",
-          "#fff3cd",
-          "#856404"
-        );
-
-        bleServer = await bleDevice.gatt.connect();
-
-        const service =
-          await bleServer.getPrimaryService(SERVICE_UUID);
-
-        bleCharacteristic =
-          await service.getCharacteristic(CHARACTERISTIC_UUID);
-
-        bleCharacteristic.addEventListener(
-          "characteristicvaluechanged",
-          handleSensorData
-        );
-
-        await bleCharacteristic.startNotifications();
-
-        setStatus(
-          "Terhubung ke " + DEVICE_NAME,
-          "#d1e7dd",
-          "#0f5132"
-        );
-
-        setConnected(true);
-
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        dataCharacteristic = await service.getCharacteristic(DATA_CHARACTERISTIC_UUID);
+        await dataCharacteristic.startNotifications();
+        dataCharacteristic.addEventListener('characteristicvaluechanged', handleSensorData);
+        setConnection(true, 'Berhasil terhubung dengan ' + (bleDevice.name || 'ESP32') + '. Menunggu data sensor.');
       } catch (error) {
-        console.error("Bluetooth error:", error);
-
-        setStatus(
-          "Gagal terhubung. " + error.message,
-          "#f8d7da",
-          "#842029"
-        );
-
-        setConnected(false);
+        setConnection(false, 'Gagal menghubungkan: ' + (error.message || error));
       }
-    }
-
-    function handleSensorData(event) {
-      const dataView = event.target.value;
-      const decoder = new TextDecoder("utf-8");
-      const message = decoder.decode(dataView).trim();
-
-      console.log("Data diterima dari ESP32:", message);
-
-      // Format data ESP32 yang diharapkan: BPM,SpO2
-      const values = message.split(",");
-
-      if (values.length !== 2) {
-        console.warn("Format data tidak sesuai:", message);
-        return;
-      }
-
-      const bpm = Number(values[0].trim());
-      const spo2 = Number(values[1].trim());
-
-      if (
-        !Number.isFinite(bpm) ||
-        !Number.isFinite(spo2) ||
-        bpm <= 0 ||
-        spo2 <= 0
-      ) {
-        console.warn("Nilai sensor tidak valid:", message);
-        return;
-      }
-
-      bpmElement.textContent = Math.round(bpm);
-      spo2Element.textContent = Math.round(spo2);
-
-      lastUpdateElement.textContent =
-        "Data terakhir diterima: " +
-        new Date().toLocaleTimeString("id-ID");
     }
 
     function onDisconnected() {
-      bleServer = null;
-      bleCharacteristic = null;
-
-      setStatus(
-        "Belum terhubung",
-        "#e2e5e9",
-        "#172b45"
-      );
-
-      setConnected(false);
-      resetValues();
+      dataCharacteristic = null;
+      setConnection(false, 'Koneksi Bluetooth terputus. Tekan Connect Bluetooth untuk menghubungkan kembali.');
     }
 
     function disconnectBluetooth() {
-      if (bleDevice && bleDevice.gatt.connected) {
-        bleDevice.gatt.disconnect();
+      if (bleDevice && bleDevice.gatt && bleDevice.gatt.connected) bleDevice.gatt.disconnect();
+      else setConnection(false, 'Perangkat tidak terhubung.');
+    }
+
+    function handleSensorData(event) {
+      const value = event.target.value;
+      const decoder = new TextDecoder('utf-8');
+      const raw = decoder.decode(value).trim();
+      try {
+        // Format utama dari ESP32: {"hr":75,"temp":36.5}
+        const data = JSON.parse(raw);
+        const hr = data.hr ?? data.HR ?? data.heartRate;
+        const temp = data.temp ?? data.temperature ?? data.Temp;
+        if (hr !== undefined && temp !== undefined) {
+          hrInput.value = Number(hr);
+          tempInput.value = Number(temp).toFixed(1);
+          return;
+        }
+      } catch (_) { /* Coba format teks sederhana di bawah. */ }
+
+      // Format alternatif: HR:75,TEMP:36.5
+      const hrMatch = raw.match(/(?:HR|heartRate)\s*[:=]\s*([\d.]+)/i);
+      const tempMatch = raw.match(/(?:TEMP|temperature)\s*[:=]\s*([\d.]+)/i);
+      if (hrMatch && tempMatch) {
+        hrInput.value = hrMatch[1];
+        tempInput.value = Number(tempMatch[1]).toFixed(1);
       } else {
-        onDisconnected();
+        connectionMessage.textContent = 'Data diterima, tetapi format belum dikenali: ' + raw;
       }
     }
 
-    connectBtn.addEventListener(
-      "click",
-      connectBluetooth
-    );
-
-    disconnectBtn.addEventListener(
-      "click",
-      disconnectBluetooth
-    );
-
-    if (!navigator.bluetooth) {
-      setStatus(
-        "Web Bluetooth tidak tersedia di browser ini",
-        "#f8d7da",
-        "#842029"
-      );
-
-      connectBtn.disabled = true;
+    function renderRecords() {
+      recordCount.textContent = records.length + ' data';
+      if (!records.length) {
+        recordsBody.innerHTML = '<tr><td class="empty" colspan="3">Belum ada data. Silakan lakukan pengukuran dan tekan Simpan Data.</td></tr>';
+        return;
+      }
+      recordsBody.innerHTML = '';
+      records.forEach(record => {
+        const tr = document.createElement('tr');
+        [record.name, record.hr, record.temp].forEach(value => {
+          const td = document.createElement('td');
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        recordsBody.appendChild(tr);
+      });
     }
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const name = nameInput.value.trim();
+      const hr = Number(hrInput.value);
+      const temp = Number(tempInput.value);
+      const saveMessage = document.getElementById('saveMessage');
+      if (!name) {
+        saveMessage.textContent = 'Masukkan nama terlebih dahulu.';
+        saveMessage.classList.add('error');
+        nameInput.focus();
+        return;
+      }
+      if (!hrInput.value || !tempInput.value || !Number.isFinite(hr) || !Number.isFinite(temp)) {
+        saveMessage.textContent = 'Data HR dan temperatur belum tersedia. Hubungkan ESP32 dan tunggu data sensor.';
+        saveMessage.classList.add('error');
+        return;
+      }
+      records.unshift({ name, hr, temp: temp.toFixed(1) });
+      try { localStorage.setItem('monitoringRecords', JSON.stringify(records)); } catch (_) {}
+      renderRecords();
+      saveMessage.textContent = 'Data berhasil disimpan.';
+      saveMessage.classList.remove('error');
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      const message = document.getElementById('downloadMessage');
+      if (!records.length) {
+        message.textContent = 'Belum ada data untuk diunduh.';
+        return;
+      }
+      const rows = [['Nama', 'HR (bpm)', 'Temperatur (°C)'],
+        ...records.map(r => [r.name, r.hr, r.temp])];
+      const csv = '\uFEFF' + rows.map(row =>
+        row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')
+      ).join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'data-monitoring-kesehatan.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      message.textContent = 'File CSV berhasil dibuat dan diunduh.';
+    });
+
+    connectBtn.addEventListener('click', () => {
+      if (bleDevice && bleDevice.gatt && bleDevice.gatt.connected) disconnectBluetooth();
+      else connectBluetooth();
+    });
   </script>
 </body>
 </html>
-```
